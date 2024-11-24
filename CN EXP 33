@@ -1,0 +1,152 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <fcntl.h>
+
+#define PORT 12345
+#define BUFFER_SIZE 1024
+
+void run_server() {
+    int server_fd, client_fd;
+    struct sockaddr_in server_addr, client_addr;
+    socklen_t client_len = sizeof(client_addr);
+    char buffer[BUFFER_SIZE];
+    int file_fd;
+    int bytes_read;
+
+    // Create socket
+    server_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (server_fd < 0) {
+        perror("Socket creation failed");
+        exit(EXIT_FAILURE);
+    }
+
+    // Configure server address
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = INADDR_ANY;
+    server_addr.sin_port = htons(PORT);
+
+    // Bind socket
+    if (bind(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+        perror("Bind failed");
+        close(server_fd);
+        exit(EXIT_FAILURE);
+    }
+
+    // Listen for connections
+    if (listen(server_fd, 5) < 0) {
+        perror("Listen failed");
+        close(server_fd);
+        exit(EXIT_FAILURE);
+    }
+
+    printf("File Transfer Server is running on port %d...\n", PORT);
+
+    // Accept a connection
+    client_fd = accept(server_fd, (struct sockaddr *)&client_addr, &client_len);
+    if (client_fd < 0) {
+        perror("Accept failed");
+        close(server_fd);
+        exit(EXIT_FAILURE);
+    }
+
+    printf("Client connected, receiving file...\n");
+
+    // Receive file
+    file_fd = open("received_file.txt", O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (file_fd < 0) {
+        perror("Failed to create file");
+        close(client_fd);
+        close(server_fd);
+        exit(EXIT_FAILURE);
+    }
+
+    while ((bytes_read = recv(client_fd, buffer, BUFFER_SIZE, 0)) > 0) {
+        write(file_fd, buffer, bytes_read);
+    }
+
+    printf("File received and saved as 'received_file.txt'\n");
+    close(file_fd);
+    close(client_fd);
+    close(server_fd);
+}
+
+void run_client(const char *server_ip, const char *file_name) {
+    int sockfd;
+    struct sockaddr_in server_addr;
+    char buffer[BUFFER_SIZE];
+    int file_fd;
+    int bytes_read;
+
+    // Create socket
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd < 0) {
+        perror("Socket creation failed");
+        exit(EXIT_FAILURE);
+    }
+
+    // Configure server address
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(PORT);
+    if (inet_pton(AF_INET, server_ip, &server_addr.sin_addr) <= 0) {
+        perror("Invalid server IP address");
+        close(sockfd);
+        exit(EXIT_FAILURE);
+    }
+
+    // Connect to server
+    if (connect(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+        perror("Connection to server failed");
+        close(sockfd);
+        exit(EXIT_FAILURE);
+    }
+
+    printf("Connected to server, sending file: %s...\n", file_name);
+
+    // Open the file
+    file_fd = open(file_name, O_RDONLY);
+    if (file_fd < 0) {
+        perror("Failed to open file");
+        close(sockfd);
+        exit(EXIT_FAILURE);
+    }
+
+    // Send file
+    while ((bytes_read = read(file_fd, buffer, BUFFER_SIZE)) > 0) {
+        send(sockfd, buffer, bytes_read, 0);
+    }
+
+    printf("File sent successfully.\n");
+    close(file_fd);
+    close(sockfd);
+}
+
+int main(int argc, char *argv[]) {
+    if (argc < 2) {
+        fprintf(stderr, "Usage: %s <server|client> [server_ip] [file_name]\n", argv[0]);
+        exit(EXIT_FAILURE);
+    }
+
+    if (strcmp(argv[1], "server") == 0) {
+        run_server();
+    } else if (strcmp(argv[1], "client") == 0) {
+        if (argc != 4) {
+            fprintf(stderr, "Usage for client: %s client <server_ip> <file_name>\n", argv[0]);
+            exit(EXIT_FAILURE);
+        }
+        run_client(argv[2], argv[3]);
+    } else {
+        fprintf(stderr, "Invalid mode. Use 'server' or 'client'.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    return 0;
+}
+
+OUTPUT:
+
+File Transfer Server is running on port 12345...
+Client connected, receiving file...
+File received and saved as 'received_file.txt'
