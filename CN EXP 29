@@ -1,0 +1,148 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+
+#define PORT 12345
+#define BUFFER_SIZE 1024
+
+void run_server() {
+    int server_fd, client_fd;
+    struct sockaddr_in server_addr, client_addr;
+    char buffer[BUFFER_SIZE];
+    socklen_t client_len = sizeof(client_addr);
+
+    // Create socket
+    server_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (server_fd < 0) {
+        perror("Socket creation failed");
+        exit(EXIT_FAILURE);
+    }
+
+    // Configure server address
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = INADDR_ANY;
+    server_addr.sin_port = htons(PORT);
+
+    // Bind socket
+    if (bind(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+        perror("Bind failed");
+        close(server_fd);
+        exit(EXIT_FAILURE);
+    }
+
+    // Listen for connections
+    if (listen(server_fd, 5) < 0) {
+        perror("Listen failed");
+        close(server_fd);
+        exit(EXIT_FAILURE);
+    }
+
+    printf("Echo Server is running on port %d...\n", PORT);
+
+    // Accept and handle connections
+    client_fd = accept(server_fd, (struct sockaddr *)&client_addr, &client_len);
+    if (client_fd < 0) {
+        perror("Accept failed");
+        close(server_fd);
+        exit(EXIT_FAILURE);
+    }
+
+    printf("Client connected\n");
+
+    while (1) {
+        memset(buffer, 0, BUFFER_SIZE);
+        int bytes_read = read(client_fd, buffer, BUFFER_SIZE);
+        if (bytes_read <= 0) {
+            printf("Client disconnected\n");
+            break;
+        }
+
+        printf("Received: %s", buffer);
+        write(client_fd, buffer, bytes_read);  // Echo back
+    }
+
+    close(client_fd);
+    close(server_fd);
+}
+
+void run_client(const char *server_ip) {
+    int sockfd;
+    struct sockaddr_in server_addr;
+    char buffer[BUFFER_SIZE];
+
+    // Create socket
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd < 0) {
+        perror("Socket creation failed");
+        exit(EXIT_FAILURE);
+    }
+
+    // Configure server address
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(PORT);
+    if (inet_pton(AF_INET, server_ip, &server_addr.sin_addr) <= 0) {
+        perror("Invalid server IP address");
+        close(sockfd);
+        exit(EXIT_FAILURE);
+    }
+
+    // Connect to server
+    if (connect(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+        perror("Connection to server failed");
+        close(sockfd);
+        exit(EXIT_FAILURE);
+    }
+
+    printf("Connected to server %s on port %d\n", server_ip, PORT);
+
+    while (1) {
+        printf("Enter message: ");
+        fgets(buffer, BUFFER_SIZE, stdin);
+
+        if (strcmp(buffer, "exit\n") == 0) {
+            printf("Closing connection...\n");
+            break;
+        }
+
+        write(sockfd, buffer, strlen(buffer));  // Send message
+        memset(buffer, 0, BUFFER_SIZE);
+        read(sockfd, buffer, BUFFER_SIZE);  // Receive echo
+        printf("Echo from server: %s", buffer);
+    }
+
+    close(sockfd);
+}
+
+int main(int argc, char *argv[]) {
+    if (argc < 2) {
+        fprintf(stderr, "Usage: %s <server|client> [server_ip]\n", argv[0]);
+        exit(EXIT_FAILURE);
+    }
+
+    if (strcmp(argv[1], "server") == 0) {
+        run_server();
+    } else if (strcmp(argv[1], "client") == 0) {
+        if (argc != 3) {
+            fprintf(stderr, "Usage for client: %s client <server_ip>\n", argv[0]);
+            exit(EXIT_FAILURE);
+        }
+        run_client(argv[2]);
+    } else {
+        fprintf(stderr, "Invalid mode. Use 'server' or 'client'.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    return 0;
+}
+
+
+OUTPUT:
+
+Echo Server is running on port 12345...
+Client connected
+Received: Hello, server!
+Received: How are you?
+Received: exit
+Client disconnected
