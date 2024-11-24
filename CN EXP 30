@@ -1,0 +1,193 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <pthread.h>
+
+#define PORT 12345
+#define BUFFER_SIZE 1024
+#define MAX_CLIENTS 10
+
+int client_sockets[MAX_CLIENTS];
+int client_count = 0;
+pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+
+// Function to broadcast messages to all clients
+void broadcast_message(const char *message, int sender_socket) {
+    pthread_mutex_lock(&lock);
+    for (int i = 0; i < client_count; i++) {
+        if (client_sockets[i] != sender_socket) {
+            send(client_sockets[i], message, strlen(message), 0);
+        }
+    }
+    pthread_mutex_unlock(&lock);
+}
+
+// Function to handle individual clients
+void *handle_client(void *arg) {
+    int client_socket = *(int *)arg;
+    char buffer[BUFFER_SIZE];
+    int bytes_read;
+
+    while ((bytes_read = recv(client_socket, buffer, BUFFER_SIZE, 0)) > 0) {
+        buffer[bytes_read] = '\0';
+        printf("Client %d: %s", client_socket, buffer);
+        broadcast_message(buffer, client_socket);
+    }
+
+    // Remove client on disconnect
+    pthread_mutex_lock(&lock);
+    for (int i = 0; i < client_count; i++) {
+        if (client_sockets[i] == client_socket) {
+            client_sockets[i] = client_sockets[client_count - 1];
+            client_count--;
+            break;
+        }
+    }
+    pthread_mutex_unlock(&lock);
+
+    close(client_socket);
+    printf("Client %d disconnected\n", client_socket);
+    return NULL;
+}
+
+void run_server() {
+    int server_socket, client_socket;
+    struct sockaddr_in server_addr, client_addr;
+    socklen_t client_len = sizeof(client_addr);
+    pthread_t thread_id;
+
+    // Create server socket
+    server_socket = socket(AF_INET, SOCK_STREAM, 0);
+    if (server_socket < 0) {
+        perror("Socket creation failed");
+        exit(EXIT_FAILURE);
+    }
+
+    // Configure server address
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = INADDR_ANY;
+    server_addr.sin_port = htons(PORT);
+
+    // Bind socket
+    if (bind(server_socket, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+        perror("Bind failed");
+        close(server_socket);
+        exit(EXIT_FAILURE);
+    }
+
+    // Listen for incoming connections
+    if (listen(server_socket, MAX_CLIENTS) < 0) {
+        perror("Listen failed");
+        close(server_socket);
+        exit(EXIT_FAILURE);
+    }
+
+    printf("Chat server is running on port %d...\n", PORT);
+
+    while (1) {
+        client_socket = accept(server_socket, (struct sockaddr *)&client_addr, &client_len);
+        if (client_socket < 0) {
+            perror("Accept failed");
+            continue;
+        }
+
+        pthread_mutex_lock(&lock);
+        client_sockets[client_count++] = client_socket;
+        pthread_mutex_unlock(&lock);
+
+        printf("Client %d connected\n", client_socket);
+        pthread_create(&thread_id, NULL, handle_client, &client_socket);
+    }
+}
+
+void run_client(const char *server_ip) {
+    int sockfd;
+    struct sockaddr_in server_addr;
+    char buffer[BUFFER_SIZE];
+    pthread_t thread_id;
+
+    // Create client socket
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd < 0) {
+        perror("Socket creation failed");
+        exit(EXIT_FAILURE);
+    }
+
+    // Configure server address
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(PORT);
+    if (inet_pton(AF_INET, server_ip, &server_addr.sin_addr) <= 0) {
+        perror("Invalid server IP address");
+        close(sockfd);
+        exit(EXIT_FAILURE);
+    }
+
+    // Connect to server
+    if (connect(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+        perror("Connection failed");
+        close(sockfd);
+        exit(EXIT_FAILURE);
+    }
+
+    printf("Connected to chat server at %s:%d\n", server_ip, PORT);
+
+    // Thread to receive messages
+    void *receive_messages(void *arg) {
+        int sockfd = *(int *)arg;
+        char buffer[BUFFER_SIZE];
+        int bytes_read;
+
+        while ((bytes_read = recv(sockfd, buffer, BUFFER_SIZE, 0)) > 0) {
+            buffer[bytes_read] = '\0';
+            printf("%s", buffer);
+        }
+
+        return NULL;
+    }
+    pthread_create(&thread_id, NULL, receive_messages, &sockfd);
+
+    // Send messages
+    while (1) {
+        fgets(buffer, BUFFER_SIZE, stdin);
+        send(sockfd, buffer, strlen(buffer), 0);
+    }
+
+    close(sockfd);
+}
+
+int main(int argc, char *argv[]) {
+    if (argc < 2) {
+        fprintf(stderr, "Usage: %s <server|client> [server_ip]\n", argv[0]);
+        exit(EXIT_FAILURE);
+    }
+
+    if (strcmp(argv[1], "server") == 0) {
+        run_server();
+    } else if (strcmp(argv[1], "client") == 0) {
+        if (argc != 3) {
+            fprintf(stderr, "Usage for client: %s client <server_ip>\n", argv[0]);
+            exit(EXIT_FAILURE);
+        }
+        run_client(argv[2]);
+    } else {
+        fprintf(stderr, "Invalid mode. Use 'server' or 'client'.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    return 0;
+}
+
+
+OUTPUT:
+
+Chat server is running on port 12345...
+Client 4 connected
+Client 5 connected
+Client 4: Hello, this is Client 1!
+Client 5: Hi Client 1, this is Client 2!
+Client 4 disconnected
+Client 5 disconnected
+
+
