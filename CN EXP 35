@@ -1,0 +1,94 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <stdbool.h>
+#include <time.h>
+
+#define MAX_FRAMES 10
+#define WINDOW_SIZE 4
+
+// Simulates sending a frame
+void send_frame(int frame_no) {
+    printf("Frame %d sent.\n", frame_no);
+}
+
+// Simulates receiving a frame
+bool receive_frame(int frame_no) {
+    // Simulate random frame loss (e.g., frame_no % 3 == 0 causes loss for demonstration)
+    if (rand() % 4 == 0) {
+        printf("Frame %d lost during transmission.\n", frame_no);
+        return false;
+    }
+    printf("Frame %d received successfully.\n", frame_no);
+    return true;
+}
+
+// Simulates acknowledgment for a frame
+void acknowledge_frame(int frame_no) {
+    printf("Acknowledgment for frame %d received.\n", frame_no);
+}
+
+int main() {
+    int total_frames, sent_frame = 0, acked_frame = 0;
+    int window_start = 0, window_end = WINDOW_SIZE - 1;
+
+    printf("Enter the total number of frames to be sent: ");
+    scanf("%d", &total_frames);
+
+    printf("\nSliding Window Protocol Simulation\n");
+    srand(time(NULL)); // Seed for randomness
+
+    while (acked_frame < total_frames) {
+        // Send all frames in the current window
+        for (int i = window_start; i <= window_end && i < total_frames; i++) {
+            send_frame(i);
+        }
+
+        // Simulate receiver acknowledgment
+        for (int i = window_start; i <= window_end && i < total_frames; i++) {
+            if (receive_frame(i)) {
+                acknowledge_frame(i);
+                acked_frame++;
+                window_start++;
+                window_end++;
+            } else {
+                printf("Error detected in frame %d. Resending window from frame %d.\n", i, window_start);
+                break; // Go-Back-N: resend from the first unacknowledged frame
+            }
+        }
+
+        // Pause to simulate delay
+        sleep(1);
+    }
+
+    printf("\nAll frames transmitted and acknowledged successfully.\n");
+    return 0;
+}
+
+OUTPUT:
+
+Sliding Window Protocol Simulation
+Frame 0 sent.
+Frame 1 sent.
+Frame 2 sent.
+Frame 3 sent.
+Frame 0 received successfully.
+Acknowledgment for frame 0 received.
+Frame 1 received successfully.
+Acknowledgment for frame 1 received.
+Frame 2 lost during transmission.
+Error detected in frame 2. Resending window from frame 2.
+
+Frame 2 sent.
+Frame 3 sent.
+Frame 2 received successfully.
+Acknowledgment for frame 2 received.
+Frame 3 received successfully.
+Acknowledgment for frame 3 received.
+
+Frame 4 sent.
+Frame 5 sent.
+Frame 6 sent.
+Frame 7 sent.
+...
+All frames transmitted and acknowledged successfully.
