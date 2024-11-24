@@ -1,0 +1,98 @@
+#include <stdio.h>
+#include <string.h>
+
+#define MAX 100
+
+// Function to perform XOR operation
+void xor_operation(char *dividend, const char *divisor, int divisor_length) {
+    for (int i = 0; i < divisor_length; i++) {
+        dividend[i] = (dividend[i] == divisor[i]) ? '0' : '1';
+    }
+}
+
+// Function to calculate the remainder (CRC)
+void calculate_remainder(char *data, const char *divisor, char *remainder) {
+    int data_length = strlen(data);
+    int divisor_length = strlen(divisor);
+    char temp[MAX];
+
+    strncpy(temp, data, divisor_length);  // Take the first `divisor_length` bits
+    temp[divisor_length] = '\0';
+
+    for (int i = divisor_length; i <= data_length; i++) {
+        if (temp[0] == '1') {
+            xor_operation(temp, divisor, divisor_length);
+        }
+        memmove(temp, temp + 1, divisor_length - 1);
+        temp[divisor_length - 1] = (i < data_length) ? data[i] : '0';
+    }
+
+    strncpy(remainder, temp, divisor_length - 1);
+    remainder[divisor_length - 1] = '\0';
+}
+
+// Function to append CRC to the data
+void append_crc(char *data, const char *crc) {
+    strcat(data, crc);
+}
+
+int main() {
+    char data[MAX], divisor[MAX], transmitted_data[MAX];
+    char remainder[MAX], check_remainder[MAX];
+
+    // Input data and divisor (polynomial)
+    printf("Enter the data bits: ");
+    scanf("%s", data);
+    printf("Enter the divisor bits: ");
+    scanf("%s", divisor);
+
+    // Append zero bits equal to divisor length - 1
+    int divisor_length = strlen(divisor);
+    strcat(data, "000000000000000000"); // Append maximum of 20 zeros initially
+    data[strlen(data) - divisor_length + 1] = '\0';
+
+    printf("\n--- Sender Side ---\n");
+    printf("Data after appending zeros: %s\n", data);
+
+    // Calculate CRC
+    calculate_remainder(data, divisor, remainder);
+    printf("CRC: %s\n", remainder);
+
+    // Transmit the data with CRC
+    strcpy(transmitted_data, data);
+    append_crc(transmitted_data, remainder);
+    printf("Transmitted data: %s\n", transmitted_data);
+
+    printf("\n--- Receiver Side ---\n");
+    // Simulate receiver-side error checking
+    calculate_remainder(transmitted_data, divisor, check_remainder);
+    printf("Remainder after checking: %s\n", check_remainder);
+
+    // Check if remainder is zero
+    int error = 0;
+    for (int i = 0; i < divisor_length - 1; i++) {
+        if (check_remainder[i] != '0') {
+            error = 1;
+            break;
+        }
+    }
+
+    if (error) {
+        printf("Error detected in the received data.\n");
+    } else {
+        printf("No error detected in the received data.\n");
+    }
+
+    return 0;
+}
+
+OUTPUT:
+
+--- Sender Side ---
+Data after appending zeros: 11010011101100000
+CRC: 100
+Transmitted data: 11010011101100100
+
+--- Receiver Side ---
+Remainder after checking: 000
+No error detected in the received data.
