@@ -1,0 +1,132 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+
+#define PORT 5353
+#define BUFFER_SIZE 1024
+
+void resolve_hostname(const char *hostname, char *ip_address) {
+    // Example hardcoded DNS resolution
+    if (strcmp(hostname, "example.com") == 0)
+        strcpy(ip_address, "93.184.216.34");
+    else if (strcmp(hostname, "google.com") == 0)
+        strcpy(ip_address, "142.250.183.78");
+    else
+        strcpy(ip_address, "0.0.0.0"); // Not found
+}
+
+void run_server() {
+    int sockfd;
+    char buffer[BUFFER_SIZE];
+    char ip_address[BUFFER_SIZE];
+    struct sockaddr_in server_addr, client_addr;
+    socklen_t addr_len;
+
+    // Create UDP socket
+    sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sockfd < 0) {
+        perror("Socket creation failed");
+        exit(EXIT_FAILURE);
+    }
+
+    memset(&server_addr, 0, sizeof(server_addr));
+    memset(&client_addr, 0, sizeof(client_addr));
+
+    // Configure server address
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = INADDR_ANY;
+    server_addr.sin_port = htons(PORT);
+
+    // Bind the socket
+    if (bind(sockfd, (const struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+        perror("Bind failed");
+        close(sockfd);
+        exit(EXIT_FAILURE);
+    }
+
+    printf("DNS Server is running on port %d...\n", PORT);
+
+    while (1) {
+        addr_len = sizeof(client_addr);
+        int n = recvfrom(sockfd, buffer, BUFFER_SIZE, 0, (struct sockaddr *)&client_addr, &addr_len);
+        buffer[n] = '\0';
+
+        printf("Received query for: %s\n", buffer);
+
+        // Resolve hostname
+        resolve_hostname(buffer, ip_address);
+
+        // Send resolved IP back to client
+        sendto(sockfd, ip_address, strlen(ip_address), 0, (struct sockaddr *)&client_addr, addr_len);
+        printf("Sent IP: %s\n", ip_address);
+    }
+
+    close(sockfd);
+}
+
+void run_client() {
+    int sockfd;
+    char buffer[BUFFER_SIZE];
+    char ip_address[BUFFER_SIZE];
+    struct sockaddr_in server_addr;
+
+    // Create UDP socket
+    sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sockfd < 0) {
+        perror("Socket creation failed");
+        exit(EXIT_FAILURE);
+    }
+
+    memset(&server_addr, 0, sizeof(server_addr));
+
+    // Configure server address
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(PORT);
+    server_addr.sin_addr.s_addr = INADDR_ANY;
+
+    printf("Enter hostname: ");
+    fgets(buffer, BUFFER_SIZE, stdin);
+    buffer[strcspn(buffer, "\n")] = 0; // Remove newline
+
+    // Send hostname to server
+    sendto(sockfd, buffer, strlen(buffer), 0, (const struct sockaddr *)&server_addr, sizeof(server_addr));
+
+    // Receive resolved IP
+    int n = recvfrom(sockfd, ip_address, BUFFER_SIZE, 0, NULL, NULL);
+    ip_address[n] = '\0';
+
+    printf("Resolved IP: %s\n", ip_address);
+
+    close(sockfd);
+}
+
+int main(int argc, char *argv[]) {
+    if (argc != 2) {
+        fprintf(stderr, "Usage: %s [server|client]\n", argv[0]);
+        exit(EXIT_FAILURE);
+    }
+
+    if (strcmp(argv[1], "server") == 0) {
+        run_server();
+    } else if (strcmp(argv[1], "client") == 0) {
+        run_client();
+    } else {
+        fprintf(stderr, "Invalid mode. Use 'server' or 'client'.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    return 0;
+}
+
+
+OUTPUT:
+
+DNS Server is running on port 5353...
+Received query for: example.com
+Sent IP: 93.184.216.34
+Received query for: google.com
+Sent IP: 142.250.183.78
+Received query for: unknown.com
+Sent IP: 0.0.0.0
