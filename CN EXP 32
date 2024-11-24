@@ -1,0 +1,47 @@
+#include <stdio.h>
+#include <string.h>
+
+// Function to perform bit stuffing
+void bitStuffing(char *data, char *stuffedData) {
+    int j = 0;  // Index for the stuffed data
+    int count = 0;  // Counter for consecutive '1's
+
+    // Traverse through the data
+    for (int i = 0; data[i] != '\0'; i++) {
+        stuffedData[j++] = data[i];  // Copy the current bit
+
+        if (data[i] == '1') {
+            count++;
+        } else {
+            count = 0;  // Reset count if the current bit is '0'
+        }
+
+        // Perform bit stuffing if there are five consecutive '1's
+        if (count == 5) {
+            stuffedData[j++] = '0';  // Stuff a '0'
+            count = 0;  // Reset count after stuffing
+        }
+    }
+
+    stuffedData[j] = '\0';  // Null-terminate the stuffed data
+}
+
+int main() {
+    char data[] = "111110101111101";  // Example data (bit stream as string)
+    char stuffedData[100];  // Buffer for the stuffed data
+
+    printf("Original Data: %s\n", data);
+
+    // Perform bit stuffing
+    bitStuffing(data, stuffedData);
+
+    // Print the stuffed data
+    printf("Stuffed Data: %s\n", stuffedData);
+
+    return 0;
+}
+
+
+//OUTPUT
+Original Data: 111110101111101
+Stuffed Data: 11111001011111001
