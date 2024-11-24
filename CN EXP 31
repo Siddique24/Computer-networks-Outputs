@@ -1,0 +1,57 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define MAX_IP_LENGTH 16
+#define MAX_MAC_LENGTH 18
+#define ARP_TABLE_SIZE 3
+
+// ARP Table structure for storing IP-MAC mappings
+typedef struct {
+    char ip[MAX_IP_LENGTH];
+    char mac[MAX_MAC_LENGTH];
+} ARPEntry;
+
+// Predefined ARP table
+ARPEntry arp_table[ARP_TABLE_SIZE] = {
+    {"192.168.1.1", "00:1A:2B:3C:4D:5E"},
+    {"192.168.1.2", "00:1A:2B:3C:4D:5F"},
+    {"192.168.1.3", "00:1A:2B:3C:4D:60"}
+};
+
+// Function to simulate ARP request
+void arp_request(const char *ip) {
+    printf("ARP Request: Who has IP %s?\n", ip);
+
+    // Search the ARP table for the IP address
+    for (int i = 0; i < ARP_TABLE_SIZE; i++) {
+        if (strcmp(arp_table[i].ip, ip) == 0) {
+            // IP found, return the MAC address
+            printf("ARP Reply: IP %s is at MAC address %s\n", ip, arp_table[i].mac);
+            return;
+        }
+    }
+
+    // IP not found, respond with 'not found' message
+    printf("ARP Reply: IP %s not found in ARP table.\n", ip);
+}
+
+// Main function to run the simulated ARP request and reply
+int main() {
+    char ip[MAX_IP_LENGTH];
+
+    // Request user input for IP to resolve
+    printf("Enter IP address to resolve: ");
+    scanf("%s", ip);
+
+    // Simulate the ARP request and response
+    arp_request(ip);
+
+    return 0;
+}
+
+
+//OUTPUT
+Enter IP address to resolve: 192.168.1.1
+ARP Request: Who has IP 192.168.1.1?
+ARP Reply: IP 192.168.1.1 is at MAC address 00:1A:2B:3C:4D:5E
